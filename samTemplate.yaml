@@ -8,25 +8,17 @@ Resources:
       FunctionName: search-photos
       Handler: lambda_function.lambda_handler
       Runtime: python3.8
-      CodeUri: ./search-photos
+      CodeUri: ./LambdaCode
       Description: "Lambda function for CD"
       MemorySize: 128
       Timeout: 30
       Role: 'arn:aws:iam::257520041141:role/service-role/codebuild-coms6998hw2-lbppl-project-service-role'
-      Environment:
-        Variables:
-          REGION: us-east-1
-  CDDemoLambda2:
-    Type: "AWS::Serverless::Function"
-    Properties:
-      FunctionName: index-photos
-      Handler: lambda_function.lambda_handler
-      Runtime: python3.8
-      CodeUri: ./index-photos
-      Description: "Lambda function for CD"
-      MemorySize: 128
-      Timeout: 30
-      Role: 'arn:aws:iam::257520041141:role/service-role/codebuild-coms6998hw2-lbppl-project-service-role'
+      Events:
+        getAZsAPI:
+          Type: Api
+          Properties:
+            Path: /getazs
+            Method: get
       Environment:
         Variables:
           REGION: us-east-1

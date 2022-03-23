@@ -2,10 +2,10 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: "AWS::Serverless-2016-10-31"
 Description: CD HW2 Lambda
 Resources:
-  CDDemoLambda1:
+ LambdaFunction:
     Type: "AWS::Serverless::Function"
     Properties:
-      FunctionName: search-photos
+      FunctionName: lambda-function
       Handler: lambda_function.lambda_handler
       Runtime: python3.8
       CodeUri: ./LambdaCode

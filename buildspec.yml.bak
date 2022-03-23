@@ -2,7 +2,7 @@ version: 0.2
 phases:  
   install:
     commands:
-      - aws cloudformation package --template-file search-photos.yaml --s3-bucket coms6998hw2-lambda-pipeline --output-template-file output-template.yml
+      - aws cloudformation package --template-file search-photos.yaml --s3-bucket coms6998hw2-lambda-pipeline-search-photos --output-template-file output-template.yml
 artifacts:  
   type: zip
   files:

@@ -5,129 +5,165 @@ import sys
 import uuid
 import time
 import requests
+import inflect
+
+
 
 ES_HOST = 'https://search-coms6998hw2-if6wqsl2ycyzxsmj4ujcjvkrem.us-east-1.es.amazonaws.com'
 REGION = 'us-east-1'
 aws_auth = ('admin', 'Coms6998!')
 
+
+def return_singular(argument,word): # Ture 为 单数 False为复数
+    argument = inflect.engine()
+    return argument.singular_noun(word)
+
+def singular_test(argument, word):
+    argument = inflect.engine()
+    if argument.singular_noun(word) == False:
+        print (word, "is singular")
+        return True
+    else:
+        print (word, "is plural")
+        return False
+
 def get_url(es_index, es_type, keyword):
-    #url = ES_HOST + '/' + es_index + '/' + es_type + '/_search?q=' + keyword.lower()
-    url = ES_HOST + '/' + es_index +  '/_search?q=' + keyword.lower()
+    # url = ES_HOST + '/' + es_index + '/' + es_type + '/_search?q=' + keyword.lower()
+    url = ES_HOST + '/' + es_index + '/_search?q=' + keyword.lower()
     return url
 
+
 def lambda_handler(event, context):
-	# recieve from API Gateway
-	print('event: ', event)
-	print("EVENT --- {}".format(json.dumps(event)))
-	
-	headers = { "Content-Type": "application/json" }
-	lex = boto3.client('lex-runtime','us-east-1')
+    # recieve from API Gateway
+    print('event: ', event)
+    print("EVENT --- {}".format(json.dumps(event)))
 
-	query = event["queryStringParameters"]["q"]
-	
-	if query == "voiceSearch":
-		transcribe = boto3.client('transcribe')
-		job_name = time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()).replace(":", "-").replace(" ", "")
-		job_uri = "https://s3.amazonaws.com/cc3-voices/test.mp3"
-		transcribe.start_transcription_job(
-		    TranscriptionJobName=job_name,
-		    Media={'MediaFileUri': job_uri},
-		    MediaFormat='mp3',
-		    LanguageCode='en-US'
-		)
-		while True:
-		    status = transcribe.get_transcription_job(TranscriptionJobName=job_name)
-		    if status['TranscriptionJob']['TranscriptionJobStatus'] in ['COMPLETED', 'FAILED']:
-		        break
-		    print("Not ready yet...")
-		    time.sleep(5)
-		print("Transcript URL: ", status)
-		transcriptURL = status['TranscriptionJob']['Transcript']['TranscriptFileUri']
-		trans_text = requests.get(transcriptURL).json()
-		
-		print("Transcripts: ", trans_text)
-		print(trans_text["results"]['transcripts'][0]['transcript'])
-		
-		s3client = boto3.client('s3')
-		response = s3client.delete_object(
-		    Bucket='cc3-voices',
-		    Key='test.mp3'
-		)
-		query = trans_text["results"]['transcripts'][0]['transcript']
-		s3client.put_object(Body=query, Bucket='cc3-voices', Key='test.txt')
-		return {
-			'statusCode': 200,
-			'headers': {
-				"Access-Control-Allow-Origin": "*"
-			},
-			'body': "transcribe done"
-		}
-	
-	if query == "voiceResult":
-		s3client = boto3.client('s3')
-		data = s3client.get_object(Bucket='cc3-voices', Key='test.txt')
-		query = data.get('Body').read().decode('utf-8')
-		print("Voice query: ", query)
-		s3client.delete_object(
-			Bucket='cc3-voices',
-			Key='test.txt'
-		)
-	
+    headers = {"Content-Type": "application/json"}
+    lex = boto3.client('lex-runtime', 'us-east-1')
 
-	lex_response = lex.post_text(
-		botName='photoLex',
-		botAlias='photoBot',
-		userId='string',
-		inputText=query
-	)
-	
-	print("LEX RESPONSE --- {}".format(json.dumps(lex_response)))
+    query = event["queryStringParameters"]["q"]
+    print('query is: ', query)
+    
 
-	slots = lex_response['slots']
-	print(slots)
-	img_list = []
-	for i, tag in slots.items():
-		if tag:
-			url = get_url('photos', 'Photo', tag)
-			print("ES URL --- {}".format(url))
+    lex_response = lex.post_text(
+        botName='photoLex',
+        botAlias='photoBot',
+        userId='string',
+        inputText=query
+    )
 
-			
-			#es_response = requests.get(url, headers=headers)
-			#print('"ES RESPONSE --- ', es_response)
-			es_response = requests.get(url,auth=aws_auth, headers=headers).json()
-			print("ES RESPONSE --- {}".format(json.dumps(es_response)))
+    print("LEX RESPONSE --- {}".format(json.dumps(lex_response)))
+    if 'slots' not in lex_response:
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Headers': '*',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
+            },
+            'body': json.dumps("No such photos.")
+        }
 
-			es_src = es_response['hits']['hits']
-			print("ES HITS --- {}".format(json.dumps(es_src)))
+    slots = lex_response['slots']
+    print('slots are: ',slots)
+    img_list_1 = []
+    img_list_2 = []
+    print('img_list_1 is: ', img_list_1)
+    print('img_list_2 is: ', img_list_2)
+    flag1 = None
+    flag2 = None
+    if slots['slotOne']:
+        tag = slots['slotOne']
+        print('Orign tag is', tag)
+    
+        flag1 = singular_test(inflect, tag) # Ture 为 单数 False为复数
+        if flag1 == False:
+            tag = return_singular(inflect,tag)
+            print('After tag is ', tag)    
+        url = get_url('photos', 'Photo', tag)
+        print("ES URL --- {}".format(url))
+        es_response = requests.get(url, auth=aws_auth, headers=headers).json()
+        print("ES RESPONSE --- {}".format(json.dumps(es_response)))
 
-			for photo in es_src:
-				labels = [word.lower() for word in photo['_source']['labels']]
-				if tag in labels:
-					objectKey = photo['_source']['objectKey']
-					print('objectKey: ', objectKey)
-					img_url = 'https://s3.amazonaws.com/coms6998hw2b2/' + objectKey
-					img_list.append(img_url)
-	#print(img_list)
-	img_list = list({}.fromkeys(img_list).keys())
-	print(img_list)
-	if img_list:
-		print(img_list)
-		return {
-			'statusCode': 200,
-			'headers': {
-				'Access-Control-Allow-Headers': '*',
-				'Access-Control-Allow-Origin': '*',
-				'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
-			},
-			'body': json.dumps(img_list)
-		}
-	else:
-		return {
-			'statusCode': 200,
-			'headers': {
-				'Access-Control-Allow-Headers': '*',
-				'Access-Control-Allow-Origin': '*',
-				'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
-			},
-			'body': json.dumps("No such photos.")
-		}
+        es_src = es_response['hits']['hits']
+        print("ES HITS --- {}".format(json.dumps(es_src)))
+
+        for photo in es_src:
+            labels = [word.lower() for word in photo['_source']['labels']]
+            if tag in labels:
+                objectKey = photo['_source']['objectKey']
+                print('objectKey: ', objectKey)
+                img_url = 'https://s3.amazonaws.com/coms6998hw2b2/' + objectKey
+                img_list_1.append(img_url)
+                
+
+    if slots['slotTwo']:
+        tag = slots['slotTwo']
+        print('Orign tag is', tag)
+    
+        flag2 = singular_test(inflect, tag) # Ture 为 单数 False为复数
+        print('Flag is: ', flag2)
+        if flag2 == False:
+            tag = return_singular(inflect,tag)
+            print('After tag is ', tag)  
+        
+        url = get_url('photos', 'Photo', tag)
+        print("ES URL --- {}".format(url))
+        es_response = requests.get(url, auth=aws_auth, headers=headers).json()
+        print("ES RESPONSE --- {}".format(json.dumps(es_response)))
+
+        es_src = es_response['hits']['hits']
+        print("ES HITS --- {}".format(json.dumps(es_src)))
+
+        for photo in es_src:
+            labels = [word.lower() for word in photo['_source']['labels']]
+            if tag in labels:
+                objectKey = photo['_source']['objectKey']
+                print('objectKey: ', objectKey)
+                img_url = 'https://s3.amazonaws.com/coms6998hw2b2/' + objectKey
+                img_list_2.append(img_url)
+    
+    
+    
+
+    img_list =[]
+    print('img_list_1 is: ', img_list_1)
+    print('img_list_2 is: ', img_list_2)
+    
+    if img_list_1 == [] and img_list_2 != []:
+        img_list_buffer = img_list_2
+    elif img_list_1 != [] and img_list_2 == []:
+        img_list_buffer = img_list_1
+    else:
+        img_list_buffer = list(set(img_list_1).intersection(set(img_list_2)))
+    print('img_list_buffer is ',img_list_buffer)
+    
+    if (flag1 == False and flag2 == False) or (flag1 == False and flag2 == None): #全复数是复
+        img_list = img_list_buffer
+    elif flag1 == False or flag2 == False:#有一个是复数就单数
+        img_list = [img_list_buffer[0]]
+    elif flag1 == True:
+        img_list = [img_list_buffer[0]]
+        
+        
+    if img_list:
+        print('img_list is ', img_list)
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Headers': '*',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
+            },
+            'body': json.dumps(img_list)
+        }
+    else:
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Headers': '*',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
+            },
+            'body': json.dumps("No such photos.")
+        }

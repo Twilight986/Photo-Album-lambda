@@ -11,8 +11,9 @@ ES_HOST = 'https://search-coms6998hw2-if6wqsl2ycyzxsmj4ujcjvkrem.us-east-1.es.am
 REGION = 'us-east-1'
 aws_auth = ('admin', 'Coms6998!')
 
+# 03/29 20:58
 
-def return_singular(argument, word):  # Ture 为 单数 False为复数
+def return_singular(argument, word):  
 	argument = inflect.engine()
 	return argument.singular_noun(word)
 

@@ -12,6 +12,7 @@ REGION = 'us-east-1'
 aws_auth = ('admin', 'Coms6998!')
 
 # 03/29 20:58
+# 03/30 10:19
 
 def return_singular(argument, word):  
 	argument = inflect.engine()
